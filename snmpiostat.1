@@ -1,0 +1,121 @@
+.\"    Copyright 2015 by Clemson University
+.\"
+.\"    This file is part of snmpiostat.
+.\"
+.\"    Snmpiostat is free software: you can redistribute it and/or modify
+.\"    it under the terms of the Lesser GNU General Public License as published by
+.\"    the Free Software Foundation, either version 3 of the License, or
+.\"    (at your option) any later version.
+.\"
+.\"    snmpiostat is distributed in the hope that it will be useful,
+.\"    but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\"    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\"    Lesser GNU General Public License for more details.
+.\"
+.\"    You should have received a copy of the Lesser GNU General Public License
+.\"    along with snmpiostat.  If not, see <http://www.gnu.org/licenses/>.
+.TH snmpiostat 1 "11 Jun 2015"
+.SH NAME
+snmpiostat - Version of iostat that uses SNMP to retrieve I/O data from a remote host
+.SH SYNOPSIS
+.B
+snmpiostat
+[
+snmp common options
+]
+[
+-Ch
+]
+[
+-Cp
+]
+[
+-Cv
+]
+[
+-Cx
+]
+agent
+[
+interval
+[
+count
+]
+]
+.SH DESCRIPTION
+.I
+.B snmpiostat
+uses SNMP to retrieve I/O data for devices on an
+.B agent
+running the
+.B snmpiostatagent(8)
+module.  It then outputs the data in a format similar to iostat(1).  The first line of output
+is the cumulative stats since boot time, successive lines (if
+.B interval
+is specified) are incremental stats over the previous
+.I interval.
+If
+.B count
+is specified then
+.B snmpiostat
+exits after
+.I count
+.I intervals.
+.LP
+The MIB that describes the variables used by
+.I snmpiostat
+are defined in DEVIOSTAT.MIB.  This file is not necessary for either
+.I snmpiostat
+or the agent module
+.I snmpiostatagent,
+however if you wish to use generic SNMP tools (eg snmpwalk(1) or snmpget(1) from the UCD net-snmp package)
+to view these variables you will need to add this MIB file to the SNMP tools' MIB list.
+.SH OPTIONS
+.B snmpiostat
+uses the UCD net-snmp API for SNMP.  This includes a function for parsing command line
+options which are common to all utilities that use the net-snmp API (eg snmpget(1), snmpwalk(1), etc).
+Please see snmpcmd(1) in the net-snmp package for details on the snmp common options.
+.LP
+To avoid conflicts with the snmp common options,
+.B snmpiostat
+specific options are all prefixed with -C, eg -Cx is the same as iostat(1) -x option, namely
+show extended device statistics.  Multiple specific options may be combined with one -C option,
+eg "-Cpx" and "-Cp -Cx" are equivalent.
+.TP
+.I -Ch
+Print a help message and exit.
+.TP
+.I -Cp
+Show statistics for block devices and their partitions.  Similar to iostat(1) -p option.
+.TP
+.I -Cv
+Print version number and exit.
+.TP
+.I -Cx
+Show extended devices statistics.  Similar to iostat(1) -x option.
+.SH CONFIGURATION
+.B snmpiostat
+reads the config file
+.I snmpiostat.conf
+when it starts (by default in the directory
+.I /usr/local/etc
+).  This file is also used by the agent module
+.B snmpiostatagent.
+The only option of interest to the agent is the baseoid to use (it's important that both
+.B snmpiostat
+and
+.B snmpiostatagent
+use the same baseoid).
+.TP
+.I baseoid ...
+The OID under which all the OIDs defined in DEVIOSTAT.MIB are found.  The default is
+SNMPv2-SMI::experimental.2 (.1.3.6.1.3.2).  If you change this value you will also
+need to update DEVIOSTAT.MIB (if you plan to add this MIB to your SNMP management tool),
+and you must make sure that
+.B snmpiostatagent(8)
+also is configured with the same baseoid.
+.SH SEE ALSO
+snmpiostatagent(8), snmpd(8), iostat(1)
+.SH AUTHOR
+Bob Schwartzkopf,
+Clemson University

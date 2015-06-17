@@ -1,0 +1,191 @@
+DEVIOSTAT-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Integer32, Counter32, experimental
+	FROM SNMPv2-SMI
+    DisplayString
+	FROM SNMPv2-TC
+;
+
+devIOStatMIB MODULE-IDENTITY
+    LAST-UPDATED	"201505260000Z"
+    ORGANIZATION	"Clemson University"
+    CONTACT-INFO	"email:	rschwa2@clemson.edu"
+    DESCRIPTION		"Device IO data."
+    REVISION		"201505260000Z"
+    DESCRIPTION		"Initial release."
+    ::= { experimental 2 }
+
+devIOStatType ::= TEXTUAL-CONVENTION
+    STATUS	current
+    DESCRIPTION
+	"A value that represents the device type, used by clients to decide
+	 if the device stats should be displayed:
+
+	 unknown(0)	Unknown device.
+	 idedisk(1)	IDE disk.
+	 scsidisk(2)	SCSI disk.
+	 devmapper(3)	Device Mapper."
+    SYNTAX	INTEGER {
+		    unknown(0),
+		    idedisk(1),
+		    scsidisk(2),
+		    devmapper(3)
+		}
+
+devIOStatTable OBJECT-TYPE
+    SYNTAX	SEQUENCE OF DevIOStatEntry
+    MAX-ACCESS	not-accessible
+    STATUS	current
+    DESCRIPTION
+	"Table of device IO statistics."
+    ::= { devIOStatMIB 1 }
+
+devIOStatEntry OBJECT-TYPE
+    SYNTAX	DevIOStatEntry
+    MAX-ACCESS	not-accessible
+    STATUS	current
+    DESCRIPTION
+	"An entry containing a device and its statistics."
+    INDEX	{ devIOStatIndex }
+    ::= { devIOStatTable 1 }
+
+DevIOStatEntry ::= SEQUENCE {
+  devIOStatIndex	Integer32,
+  devIOStatMajor	Integer32,
+  devIOStatMinor	Integer32,
+  devIOStatDevice	DisplayString,
+  devIOStatReads	Integer32,
+  devIOStatReadMerges	Integer32,
+  devIOStatReadSectors	DisplayString,
+  devIOStatReadTicks	Integer32,
+  devIOStatWrites	Integer32,
+  devIOStatWriteMerges	Integer32,
+  devIOStatWriteSectors	DisplayString,
+  devIOStatWriteTicks	Integer32,
+  devIOStatTicks	Integer32,
+  devIOStatAveQ		Integer32,
+  devIOStatType		devIOStatType
+}
+
+devIOStatIndex OBJECT-TYPE
+    SYNTAX	Integer32 (0..65535)
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Reference index for each device."
+    ::= { devIOStatEntry 1 }
+
+devIOStatMajor OBJECT-TYPE
+    SYNTAX	Integer32
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Major device number of device."
+    ::= { devIOStatEntry 2 }
+
+devIOStatMinor OBJECT-TYPE
+    SYNTAX	Integer32
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Minor device number of device."
+    ::= { devIOStatEntry 3 }
+
+devIOStatDevice OBJECT-TYPE
+    SYNTAX	DisplayString
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"The name of the device."
+    ::= { devIOStatEntry 4 }
+
+devIOStatReads OBJECT-TYPE
+    SYNTAX	Integer32
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Number of reads from device."
+    ::= { devIOStatEntry 5 }
+
+devIOStatReadMerges OBJECT-TYPE
+    SYNTAX	Integer32
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Number of reads merged for device."
+    ::= { devIOStatEntry 6 }
+
+devIOStatReadSectors OBJECT-TYPE
+    SYNTAX	DisplayString
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Number of sectors read from device."
+    ::= { devIOStatEntry 7 }
+
+devIOStatReadTicks OBJECT-TYPE
+    SYNTAX	Integer32
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Time spent reading from device (ms)."
+    ::= { devIOStatEntry 8 }
+
+devIOStatWrites OBJECT-TYPE
+    SYNTAX	Integer32
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Number of writes to device."
+    ::= { devIOStatEntry 9 }
+
+devIOStatWriteMerges OBJECT-TYPE
+    SYNTAX	Integer32
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Number of writes merged for device."
+    ::= { devIOStatEntry 10 }
+
+devIOStatWriteSectors OBJECT-TYPE
+    SYNTAX	DisplayString
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Number of sectors written to device."
+    ::= { devIOStatEntry 11 }
+
+devIOStatWriteTicks OBJECT-TYPE
+    SYNTAX	Integer32
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Time spent writing to device (ms)."
+    ::= { devIOStatEntry 12 }
+
+devIOStatTicks OBJECT-TYPE
+    SYNTAX	Integer32
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Time spent doing IO (ms)."
+    ::= { devIOStatEntry 13 }
+
+devIOStatAveQ OBJECT-TYPE
+    SYNTAX	Integer32
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Weighted time spent doing IO (ms)."
+    ::= { devIOStatEntry 14 }
+
+devIOStatType OBJECT-TYPE
+    SYNTAX	devIOStatType
+    MAX-ACCESS	read-only
+    STATUS	current
+    DESCRIPTION
+	"Type of device."
+    ::= { devIOStatEntry 15 }
+
+END

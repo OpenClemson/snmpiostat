@@ -1,0 +1,117 @@
+The snmpiostat package includes an SNMP agent (snmpiostatagent) that
+should be installed on hosts where you wish to monitor iostat data via SNMP,
+and a client (snmpiostat) that queries the agent and displays the information
+similar to the iostat program.
+
+For both programs first run configure:
+
+  ./configure
+
+Building And Installing The Agent
+
+  To build the agent, first decide where within your MIBs you wish to place
+  the snmpiostat OIDs.  By default this package uses SNMPv2-SMI::experimental.2
+  (.1.3.6.1.3.2).  If you change this you will need to change baseoid in the
+  file snmpiostat.conf (installed in /usr/local/etc by default by the installation
+  procedure that follows).  Also if you change the default baseoid, and plan to
+  add the MIB used by this package (defined in DEVIOSTAT.MIB) to your SNMP management
+  tools, then you will need to update DEVIOSTAT.MIB as well, specifically the line
+  that defines devIOStatMIB as "experimental 2":
+
+    devIOStatMIB MODULE-IDENTITY
+	LAST-UPDATED	"201505260000Z"
+	ORGANIZATION	"Clemson University"
+	CONTACT-INFO	"email:	rschwa2@clemson.edu"
+	DESCRIPTION		"Device IO data."
+	REVISION		"201505260000Z"
+	DESCRIPTION		"Initial release."
+	::= { experimental 2 }
+
+  To compile the agent:
+
+    make snmpiostatagent
+
+  To install the agent:
+
+    make install-agent
+
+  Once the agent is installed you must configure snmpd to pass the
+  baseoid to this module.  Add a line to /etc/snmp/snmpd.conf that looks
+  like this:
+
+    pass_persist	.1.3.6.1.3.2	/usr/local/sbin/snmpiostatagent
+
+  snmpiostatagent call also be run in "pass" mode (as opposed to
+  pass_persist) but this is less efficient since snmpd will have to
+  start up a new process for every request.  After adding this
+  line restart snmpd:
+
+    service snmpd restart
+
+  You can test the agent is working properly with UCD's net-snmp program
+  snmpwalk(1), eg
+
+    snmpwalk localhost .1.3.6.1.3.2
+
+  If you've added DEVIOSTAT.MIB to the MIBs that snmpwalk knows about you
+  should see lines that look like this:
+
+    DEVIOSTAT-MIB::devIOStatIndex.1 = INTEGER: 1
+    DEVIOSTAT-MIB::devIOStatIndex.2 = INTEGER: 2
+    DEVIOSTAT-MIB::devIOStatIndex.3 = INTEGER: 3
+    ...
+
+  If you haven't added DEVIOSTAT.MIB to your MIBs you should see:
+
+    SNMPv2-SMI::experimental.2.1.1.1.1 = INTEGER: 1
+    SNMPv2-SMI::experimental.2.1.1.1.2 = INTEGER: 2
+    SNMPv2-SMI::experimental.2.1.1.1.3 = INTEGER: 3
+
+Building And Installing The Client
+
+  The client snmpiostat depends on UCD's net-snmp developer package.  Some
+  installations already have the applications (eg snmpwalk, snmpget,
+  etc) but not the developer files (header files and possibly
+  libraries).  When you run configure if it finds the header files and
+  libraries you will see lines like this:
+
+    checking net-snmp/net-snmp-config.h usability... yes
+    checking net-snmp/net-snmp-config.h presence... yes
+    checking for net-snmp/net-snmp-config.h... yes
+    checking for snmp_parse_args in -lnetsnmp... yes
+
+  If any of these are "no" then you either need to run configuure with
+  the --with-netsnmp=DIR option, where DIR is the top level dir where
+  the net-snmp development package is installed, or you'll need to
+  install the net-snmp devloper package.  The sources can be found
+  here:
+
+    http://www.net-snmp.org/download.html
+
+  There may also be pre-built packages available for your OS, eg on Ubuntu
+  14.04 it's called libsnmp-dev and can be installed with:
+
+    sudo apt-get update
+    sudo apt-get install libsnmp-dev
+
+  Once configure is able to find the net-snmp developer files, compile
+  snmpiostat with:
+
+    make snmpiostat
+
+  And install with:
+
+    make install-client
+
+  Note the snmpiostat.conf files installed in this step should have the same
+  baseoid as configured when installing snmpiostatagent (it can be the same
+  file, both snmpiostat and snmpiostatagent ignore config options that aren't
+  relevant to themselves).
+
+  To run snmpiostat, assuming the agent is installed on localhost:
+
+    snmpiostat localhost
+
+  See the man page for options.  Note snmpiostat supports all the standard
+  net-snmp command line options (see snmpcmd(1)) plus -Cp and -Cx (similar
+  to iostat -p and -x options).
