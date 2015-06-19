@@ -99,6 +99,45 @@ Print version number and exit.
 .TP
 .I -Cx
 Show extended devices statistics.  Similar to iostat(1) -x option.
+.SH REPORTS
+snmpiostat only supports iostat's Device Utilization Report.  The following fields are shown:
+.TP
+.I rrqm/s
+The number of read requests merged per second that were queued to the device.  Not supported
+on Solaris.
+.TP
+.I wrqm/s
+The number of write requests merged per second that were queued to the device.  Not supported
+on Solaris.
+.TP
+.I r/s
+The number (after merges) of read requests completed per second for the device.
+.TP
+.I w/s
+The number (after merges) of write requests completed per second for the device.
+.TP
+.I rkB/s
+The number of kilobytes read from the device per second.
+.TP
+.I wkB/s
+The number of kilobytes written to the device per second.
+.TP
+.I avgrq-sz
+The average size (in sectors) of the requests issued to the device.
+.TP
+.I avgqu-sz
+The average queue length of the requests that were issued to the device.  Not supported on
+Solaris.
+.TP
+.I await
+The average time (in milliseconds) for I/O requests issued to the device to ber served.  This
+includes wait time in the queue plus service time.
+.TP
+.I svctm
+The average service time (in milliseconds) for I/O requests issued to the device.
+.TP
+.I %util
+Percentage of CPU time during which I/O requests were issued to the device.
 .SH CONFIGURATION
 .B snmpiostat
 reads the config file
