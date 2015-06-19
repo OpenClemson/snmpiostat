@@ -23,14 +23,14 @@ devIOStatType ::= TEXTUAL-CONVENTION
 	 if the device stats should be displayed:
 
 	 unknown(0)	Unknown device.
-	 idedisk(1)	IDE disk.
-	 scsidisk(2)	SCSI disk.
-	 devmapper(3)	Device Mapper."
+	 disk(1)	Disk.
+	 partition(2)	Partition.
+	 tape(3)	Tape drive."
     SYNTAX	INTEGER {
 		    unknown(0),
-		    idedisk(1),
-		    scsidisk(2),
-		    devmapper(3)
+		    disk(1),
+		    partition(2),
+		    tape(3)
 		}
 
 devIOStatTable OBJECT-TYPE
@@ -52,8 +52,6 @@ devIOStatEntry OBJECT-TYPE
 
 DevIOStatEntry ::= SEQUENCE {
   devIOStatIndex	Integer32,
-  devIOStatMajor	Integer32,
-  devIOStatMinor	Integer32,
   devIOStatDevice	DisplayString,
   devIOStatReads	Integer32,
   devIOStatReadMerges	Integer32,
@@ -76,29 +74,13 @@ devIOStatIndex OBJECT-TYPE
 	"Reference index for each device."
     ::= { devIOStatEntry 1 }
 
-devIOStatMajor OBJECT-TYPE
-    SYNTAX	Integer32
-    MAX-ACCESS	read-only
-    STATUS	current
-    DESCRIPTION
-	"Major device number of device."
-    ::= { devIOStatEntry 2 }
-
-devIOStatMinor OBJECT-TYPE
-    SYNTAX	Integer32
-    MAX-ACCESS	read-only
-    STATUS	current
-    DESCRIPTION
-	"Minor device number of device."
-    ::= { devIOStatEntry 3 }
-
 devIOStatDevice OBJECT-TYPE
     SYNTAX	DisplayString
     MAX-ACCESS	read-only
     STATUS	current
     DESCRIPTION
 	"The name of the device."
-    ::= { devIOStatEntry 4 }
+    ::= { devIOStatEntry 2 }
 
 devIOStatReads OBJECT-TYPE
     SYNTAX	Integer32
@@ -106,7 +88,7 @@ devIOStatReads OBJECT-TYPE
     STATUS	current
     DESCRIPTION
 	"Number of reads from device."
-    ::= { devIOStatEntry 5 }
+    ::= { devIOStatEntry 3 }
 
 devIOStatReadMerges OBJECT-TYPE
     SYNTAX	Integer32
@@ -114,7 +96,7 @@ devIOStatReadMerges OBJECT-TYPE
     STATUS	current
     DESCRIPTION
 	"Number of reads merged for device."
-    ::= { devIOStatEntry 6 }
+    ::= { devIOStatEntry 4 }
 
 devIOStatReadSectors OBJECT-TYPE
     SYNTAX	DisplayString
@@ -122,7 +104,7 @@ devIOStatReadSectors OBJECT-TYPE
     STATUS	current
     DESCRIPTION
 	"Number of sectors read from device."
-    ::= { devIOStatEntry 7 }
+    ::= { devIOStatEntry 5 }
 
 devIOStatReadTicks OBJECT-TYPE
     SYNTAX	Integer32
@@ -130,7 +112,7 @@ devIOStatReadTicks OBJECT-TYPE
     STATUS	current
     DESCRIPTION
 	"Time spent reading from device (ms)."
-    ::= { devIOStatEntry 8 }
+    ::= { devIOStatEntry 6 }
 
 devIOStatWrites OBJECT-TYPE
     SYNTAX	Integer32
@@ -138,7 +120,7 @@ devIOStatWrites OBJECT-TYPE
     STATUS	current
     DESCRIPTION
 	"Number of writes to device."
-    ::= { devIOStatEntry 9 }
+    ::= { devIOStatEntry 7 }
 
 devIOStatWriteMerges OBJECT-TYPE
     SYNTAX	Integer32
@@ -146,7 +128,7 @@ devIOStatWriteMerges OBJECT-TYPE
     STATUS	current
     DESCRIPTION
 	"Number of writes merged for device."
-    ::= { devIOStatEntry 10 }
+    ::= { devIOStatEntry 8 }
 
 devIOStatWriteSectors OBJECT-TYPE
     SYNTAX	DisplayString
@@ -154,7 +136,7 @@ devIOStatWriteSectors OBJECT-TYPE
     STATUS	current
     DESCRIPTION
 	"Number of sectors written to device."
-    ::= { devIOStatEntry 11 }
+    ::= { devIOStatEntry 9 }
 
 devIOStatWriteTicks OBJECT-TYPE
     SYNTAX	Integer32
@@ -162,7 +144,7 @@ devIOStatWriteTicks OBJECT-TYPE
     STATUS	current
     DESCRIPTION
 	"Time spent writing to device (ms)."
-    ::= { devIOStatEntry 12 }
+    ::= { devIOStatEntry 10 }
 
 devIOStatTicks OBJECT-TYPE
     SYNTAX	Integer32
@@ -170,7 +152,7 @@ devIOStatTicks OBJECT-TYPE
     STATUS	current
     DESCRIPTION
 	"Time spent doing IO (ms)."
-    ::= { devIOStatEntry 13 }
+    ::= { devIOStatEntry 11 }
 
 devIOStatAveQ OBJECT-TYPE
     SYNTAX	Integer32
@@ -178,7 +160,7 @@ devIOStatAveQ OBJECT-TYPE
     STATUS	current
     DESCRIPTION
 	"Weighted time spent doing IO (ms)."
-    ::= { devIOStatEntry 14 }
+    ::= { devIOStatEntry 12 }
 
 devIOStatType OBJECT-TYPE
     SYNTAX	devIOStatType
@@ -186,6 +168,6 @@ devIOStatType OBJECT-TYPE
     STATUS	current
     DESCRIPTION
 	"Type of device."
-    ::= { devIOStatEntry 15 }
+    ::= { devIOStatEntry 13 }
 
 END

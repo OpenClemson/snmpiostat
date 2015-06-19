@@ -24,14 +24,16 @@ INSTALLDIRS	= @bindir@ @sbindir@ @sysconfdir@ @mandir@/man1 @mandir@/man8
 CPPFLAGS	= @CPPFLAGS@
 CFLAGS		= @CFLAGS@ -DCONFFILE=\"@sysconfdir@/snmpiostat.conf\" -DVERSION=\"@PACKAGE_VERSION@\"
 LDFLAGS		= @LDFLAGS@
+LIBS		= @LIBS@
+INSTALL		= @INSTALL@
 
 all:	snmpiostatagent snmpiostat
 
 snmpiostatagent:	snmpiostatagent.o conf.o
-	cc $(LDFLAGS) -o $@ snmpiostatagent.o conf.o
+	cc $(LDFLAGS) -o $@ snmpiostatagent.o conf.o $(LIBS)
 
 snmpiostat:	snmpiostat.o conf.o
-	cc $(LDFLAGS) -o $@ snmpiostat.o conf.o -lnetsnmp
+	cc $(LDFLAGS) -o $@ snmpiostat.o conf.o $(LIBS)
 
 conf.o:		conf.h Makefile
 
@@ -40,15 +42,15 @@ snmpiostat.o:	conf.h config.h Makefile
 snmpiostatagent.o:	conf.h config.h Makefile
 
 install-agent:	snmpiostatagent install-dirs install-conf
-	install -m 755 snmpiostatagent @sbindir@/snmpiostatagent
-	install -m 644 snmpiostatagent.8 @mandir@/man8/snmpiostatagent.8
+	$(INSTALL) -m 755 snmpiostatagent @sbindir@/snmpiostatagent
+	$(INSTALL) -m 644 snmpiostatagent.8 @mandir@/man8/snmpiostatagent.8
 
 install-client:	snmpiostat install-dirs install-conf
-	install -m 755 snmpiostat @bindir@/snmpiostat
-	install -m 644 snmpiostat.1 @mandir@/man1/snmpiostat.1
+	$(INSTALL) -m 755 snmpiostat @bindir@/snmpiostat
+	$(INSTALL) -m 644 snmpiostat.1 @mandir@/man1/snmpiostat.1
 
 install-conf:
-	install -m 644 snmpiostat.conf @sysconfdir@/snmpiostat.conf
+	$(INSTALL) -m 644 snmpiostat.conf @sysconfdir@/snmpiostat.conf
 
 install-dirs:
 	for d in $(INSTALLDIRS) ; do \

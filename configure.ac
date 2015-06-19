@@ -15,10 +15,12 @@
 #    You should have received a copy of the Lesser GNU General Public License
 #    along with snmpiostat.  If not, see <http://www.gnu.org/licenses/>.
 
-AC_INIT(snmpiostat, 1.0.0, [rschwa2@clemson.edu], [snmpiostat.tar])
+AC_INIT(snmpiostat, 1.1.0, [rschwa2@clemson.edu], [snmpiostat.tar])
 AC_CONFIG_HEADERS([config.h])
 AC_CHECK_FILES([/proc/devices])
 AC_CHECK_FILES([/proc/diskstats])
+AC_CHECK_FILE([/usr/ucb/install],[INSTALL="/usr/ucb/install"],[INSTALL="install"])
+AC_SUBST(INSTALL)
 AC_REVISION([$Revision$])
 AC_PROG_CC
 AC_LANG(C)

@@ -7,7 +7,7 @@
     it under the terms of the Lesser GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
-
+5134
     snmpiostat is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -19,6 +19,16 @@
 
 #include "config.h"
 
+#if HAVE__PROC_DISKSTATS == 1
+#define PROCDISKSTATS		"/proc/diskstats"
+#define HAVE_LIBKSTAT		0	/* Don't use kstat if have /proc/diskstats	*/
+#endif
+
+#if HAVE__PROC_DEVICES == 1
+#define DEVICES			"/proc/devices"
+#define DEFAULT_DEVMAP_MAJOR	253
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,22 +38,23 @@
 #include <sys/param.h>
 #include <syslog.h>
 #include <stdarg.h>
+
 #if HAVE_LINUX_MAJOR_H == 1
 #include <linux/major.h>
 #endif
+
+#if HAVE_LIBKSTAT == 1
+#include <kstat.h>
+
+typedef struct {
+  kstat_t	*ks;
+  int		type;
+} kstatinfo_t;
+#endif
+
 #include "conf.h"
 
 typedef	unsigned long long	u_longlong;
-
-#if HAVE__PROC_DISKSTATS == 1
-#define PROCDISKSTATS		"/proc/diskstats"
-#define HAVE_KSTAT		0	/* Don't use kstat if have /proc/diskstats	*/
-#endif
-
-#if HAVE__PROC_DEVICES == 1
-#define DEVICES			"/proc/devices"
-#define DEFAULT_DEVMAP_MAJOR	253
-#endif
 
 #define BUFLEN		1024
 #define MAXOID		128
@@ -52,9 +63,9 @@ typedef	unsigned long long	u_longlong;
 
 /* From DEVIOSTAT.MIB devIOStatType	*/
 #define TYPE_UNKNOWN	0
-#define TYPE_IDEDISK	1
-#define TYPE_SCSIDISK	2
-#define TYPE_DEVMAPPER	3
+#define TYPE_DISK	1
+#define TYPE_PARTITION	2
+#define TYPE_TAPE	3
 
 #define MIB_NUMENTRY	15	/* Must match number of fields in mib:devIOStatEntry	*/
 
@@ -107,36 +118,48 @@ typedef struct {
   u_int		type;
 } devio_t;
 
-static int	debug = 0;
-static int	syslogfacility = LOG_DAEMON;
-static int	syslogging;				/* TRUE if using syslog, else using stdout	*/ 
-static int	persist;
-static oid_t	baseoid;				/* From config file, must match DEVIOSTAT.MIB	*/
-static void	s2oid(char *s, oid_t *oid);
-static char	*oid2s(oid_t *oid, char *s, int slen);
-static void	dorequest(int op, char *soid);
-static int	getnextoid(oid_t *oid, oid_t *nextoid, int ndev);
-static void	showoidvalue(oid_t *oid, int ndev, devio_t *devio);
-static int	oidmatch(oid_t *oid1, oid_t *oid2);
-static oid_t	*oidcpy(oid_t *oiddst, oid_t *oidsrc);
-static int	getdevio(devio_t *devio);
+static int		debug = 0;
+static int		syslogfacility = LOG_DAEMON;
+static int		syslogging;			/* TRUE if using syslog, else using stdout	*/ 
+static int		persist;
+static oid_t		baseoid;			/* From config file, must match DEVIOSTAT.MIB	*/
+static void		s2oid(char *s, oid_t *oid);
+static char		*oid2s(oid_t *oid, char *s, int slen);
+static void		dorequest(int op, char *soid);
+static int		getnextoid(oid_t *oid, oid_t *nextoid, int ndev);
+static void		showoidvalue(oid_t *oid, int ndev, devio_t *devio);
+static int		oidmatch(oid_t *oid1, oid_t *oid2);
+static oid_t		*oidcpy(oid_t *oiddst, oid_t *oidsrc);
+static int		getdevio(devio_t *devio);
 #if HAVE__PROC_DEVICES == 1
-static int	dm_major;				/* Major number of dev mapper (multipath devs)	*/
-static u_int	devmap_major();
+static int		dm_major;			/* Major number of dev mapper (multipath devs)	*/
+static u_int		devmap_major();
 #endif
-static int	s2syslogfacility(char *s);
-static void	logit(int level, char *fmt, ...);
-static void	usage(char *prog);
+#if HAVE_LIBKSTAT == 1
+static kstat_ctl_t	*kc = NULL;
+static int		kstatclass2type(kstat_t *ks);
+static kstatinfo_t	kstatinfo[MAXDEVICES];
+static int		nkstatinfo = 0;
+#endif
+static int		s2syslogfacility(char *s);
+static void		logit(int level, char *fmt, ...);
+static void		usage(char *prog);
+static  void		cleanexit(int s);
 
 main(int argc, char **argv)
 
 {
   int		i;
+  int		j;
   int		op;
   char		*soid = NULL;
   oid_t		oid;
   char		buf[BUFLEN];
   char		*s;
+#if HAVE_LIBKSTAT == 1
+  kstat_t	*ks;
+  kstatinfo_t	tkstatinfo;
+#endif
 
   while ((i = getopt(argc, argv, "dg:n:v")) != -1)
     switch (i) {
@@ -153,7 +176,7 @@ main(int argc, char **argv)
       break;
     case 'v':
       printf("snmpiostatagent version: %s\n", VERSION);
-      exit(0);
+      cleanexit(0);
     default:
       usage(argv[0]);
     }
@@ -183,6 +206,26 @@ main(int argc, char **argv)
   dm_major = devmap_major();
 #endif
 
+#if HAVE_LIBKSTAT == 1
+  if ((kc = kstat_open()) == NULL) {
+    logit(LOG_WARNING, "kstat_open: %s", strerror(errno));
+    cleanexit(1);
+  }
+  for (ks = kc->kc_chain; ks; ks = ks->ks_next) {
+    if ((kstatinfo[nkstatinfo].type = kstatclass2type(ks)) != TYPE_UNKNOWN && nkstatinfo < MAXDEVICES - 1)
+      kstatinfo[nkstatinfo++].ks = ks;
+  }
+  /* Sort by type then instance	*/
+  for (i = 0; i < nkstatinfo; i++)
+    for (j = i + 1; j < nkstatinfo; j++)
+      if (kstatinfo[i].type * 1000 + kstatinfo[i].ks->ks_instance >
+	  kstatinfo[j].type * 1000 + kstatinfo[j].ks->ks_instance) {
+	tkstatinfo = kstatinfo[i];
+	kstatinfo[i] = kstatinfo[j];
+	kstatinfo[j] = tkstatinfo;
+      }
+#endif
+
   if (soid) {					/* Not in persist mode		*/
     persist = 0;
     dorequest(op, soid);
@@ -210,9 +253,7 @@ main(int argc, char **argv)
     }
   }
 
-  if (syslogging)
-    closelog();
-  exit(0);
+  cleanexit(0);
 
 }
 
@@ -249,12 +290,13 @@ getdevio(devio_t *devio)
   int	n = 0;
 
 #if HAVE__PROC_DISKSTATS == 1
+
   FILE	*f;
   char	buf[BUFLEN];
 
   if (!(f = fopen(PROCDISKSTATS, "r"))) {
     fprintf(stderr, "Can't get I/O statistics: %s: %s\n", PROCDISKSTATS, strerror(errno));
-    exit(1);
+    cleanexit(1);
   }
   while (n < MAXDEVICES && fgets(buf, sizeof(buf), f)) {
     if (sscanf(buf, "%u %u %s %u %u %llu %u %u %u %llu %u %*u %u %u",
@@ -265,6 +307,34 @@ getdevio(devio_t *devio)
     }
   }
   fclose(f);
+
+#elif HAVE_LIBKSTAT == 1
+
+  kstat_io_t	kio;
+
+  /*
+   * Solaris doesn't track read/write wait times separately, so set r_ticks and w_ticks as
+   * total wait time divided by 2.
+   */
+  while (n < nkstatinfo) {
+    devio[n].major = 0;
+    devio[n].minor = 0;
+    kstat_read(kc, kstatinfo[n].ks, &kio);
+    strcpy(devio[n].name, kstatinfo[n].ks->ks_name);
+    devio[n].r_ios = kio.reads;
+    devio[n].r_merges = 0;
+    devio[n].r_sectors = kio.nread / 512;
+    devio[n].r_ticks = (kio.wtime + kio.rtime) / 2.0 * MILLISEC / NANOSEC;
+    devio[n].w_ios = kio.writes;
+    devio[n].w_merges = 0;
+    devio[n].w_sectors = kio.nwritten / 512;
+    devio[n].w_ticks = (kio.wtime + kio.rtime) / 2.0 * MILLISEC / NANOSEC;
+    devio[n].ticks = kio.rtime * MILLISEC / NANOSEC;
+    devio[n].aveq = 0;
+    devio[n].type = kstatinfo[n].type;
+    n++;
+  }
+    
 #endif
 
   return n;
@@ -307,64 +377,60 @@ showoidvalue(oid_t *oid, int ndev, devio_t *devio)
 
 {
   char	buf[BUFLEN];
+  int	idx;
 
   if (oid->o[baseoid.len+3] > ndev)
     return;
+  idx = oid->o[baseoid.len + 3];
   switch (oid->o[baseoid.len+2]) {
   case 1:	/* Index of each device		*/
-    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), oid->o[baseoid.len+3]);
+    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), idx);
     break;
   case 2:	/* Major number of each device	*/
-    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[oid->o[baseoid.len+3]-1].major);
+    printf("%s\nstring\n%s\n", oid2s(oid, buf, BUFLEN), devio[idx-1].name);
     break;
-  case 3:	/* Minor number of each device	*/
-    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[oid->o[baseoid.len+3]-1].minor);
+  case 3:	/* Reads			*/
+    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[idx-1].r_ios);
     break;
-  case 4:	/* Major number of each device	*/
-    printf("%s\nstring\n%s\n", oid2s(oid, buf, BUFLEN), devio[oid->o[baseoid.len+3]-1].name);
+  case 4:	/* Read merges			*/
+    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[idx-1].r_merges);
     break;
-  case 5:	/* Reads			*/
-    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[oid->o[baseoid.len+3]-1].r_ios);
+  case 5:	/* Sectors read			*/
+    printf("%s\nstring\n%llu\n", oid2s(oid, buf, BUFLEN), devio[idx-1].r_sectors);
     break;
-  case 6:	/* Read merges			*/
-    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[oid->o[baseoid.len+3]-1].r_merges);
+  case 6:	/* Time reading			*/
+    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[idx-1].r_ticks);
     break;
-  case 7:	/* Sectors read			*/
-    printf("%s\nstring\n%llu\n", oid2s(oid, buf, BUFLEN), devio[oid->o[baseoid.len+3]-1].r_sectors);
+  case 7:	/* Writes			*/
+    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[idx-1].w_ios);
     break;
-  case 8:	/* Time reading			*/
-    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[oid->o[baseoid.len+3]-1].r_ticks);
+  case 8:	/* Write merges			*/
+    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[idx-1].w_merges);
     break;
-  case 9:	/* Writes			*/
-    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[oid->o[baseoid.len+3]-1].w_ios);
+  case 9:	/* Sectors written		*/
+    printf("%s\nstring\n%llu\n", oid2s(oid, buf, BUFLEN), devio[idx-1].w_sectors);
     break;
-  case 10:	/* Write merges			*/
-    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[oid->o[baseoid.len+3]-1].w_merges);
+  case 10:	/* Time writing			*/
+    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[idx-1].w_ticks);
     break;
-  case 11:	/* Sectors written		*/
-    printf("%s\nstring\n%llu\n", oid2s(oid, buf, BUFLEN), devio[oid->o[baseoid.len+3]-1].w_sectors);
+  case 11:	/* Time spent doing IO		*/
+    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[idx-1].ticks);
     break;
-  case 12:	/* Time writing			*/
-    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[oid->o[baseoid.len+3]-1].w_ticks);
+  case 12:	/* Weighted time doing IO	*/
+    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[idx-1].aveq);
     break;
-  case 13:	/* Time spent doing IO		*/
-    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[oid->o[baseoid.len+3]-1].ticks);
-    break;
-  case 14:	/* Weighted time doing IO	*/
-    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[oid->o[baseoid.len+3]-1].aveq);
-    break;
-  case 15:	/* Device type			*/
+  case 13:	/* Device type			*/
 #ifdef linux
-    if (IDE_DISK_MAJOR(devio[oid->o[baseoid.len+3]-1].major))
-      devio[oid->o[baseoid.len+3]-1].type = TYPE_IDEDISK;
-    else if (SCSI_DISK_MAJOR(devio[oid->o[baseoid.len+3]-1].major))
-      devio[oid->o[baseoid.len+3]-1].type = TYPE_SCSIDISK;
-    else if (devio[oid->o[baseoid.len+3]-1].major == dm_major)
-      devio[oid->o[baseoid.len+3]-1].type = TYPE_DEVMAPPER;
+    if (IDE_DISK_MAJOR(devio[idx-1].major))
+      devio[idx-1].type = ((devio[idx-1].minor & 0x3F) == 0) ? TYPE_DISK : TYPE_PARTITION;
+    else if (SCSI_DISK_MAJOR(devio[idx-1].major))
+      devio[idx-1].type = ((devio[idx-1].minor & 0x0F) == 0) ? TYPE_DISK : TYPE_PARTITION;
+    else if (devio[idx-1].major == dm_major)
+      devio[idx-1].type = TYPE_DISK;
     else
-      devio[oid->o[baseoid.len+3]-1].type = 0;
+      devio[idx-1].type = TYPE_UNKNOWN;
 #endif
-    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[oid->o[baseoid.len+3]-1].type);
+    printf("%s\ninteger\n%d\n", oid2s(oid, buf, BUFLEN), devio[idx-1].type);
     break;
   default:	/* Unknown OID			*/
     logit(LOG_INFO, "Unknown OID: %s", oid2s(oid, buf, BUFLEN));
@@ -479,6 +545,36 @@ devmap_major()
 }
 #endif
 
+#if HAVE_LIBKSTAT == 1
+/*
+ * Map kstat class to devIOStatType.
+ */
+static int
+kstatclass2type(kstat_t *ks)
+
+{
+  typedef struct {
+    char	*class;
+    int		type;
+  } ksclass2type_t;
+
+  static ksclass2type_t ksclass2type[] = {
+    { "disk", TYPE_DISK },
+    { "partition", TYPE_PARTITION },
+    { "tape", TYPE_TAPE }
+  };
+  int			i;
+
+  if (ks->ks_type != KSTAT_TYPE_IO)
+    return TYPE_UNKNOWN;
+  for (i = 0; i < sizeof(ksclass2type) / sizeof(ksclass2type_t); i++)
+    if (strcmp(ks->ks_class, ksclass2type[i].class) == 0)
+      return ksclass2type[i].type;
+  return TYPE_UNKNOWN;
+}
+
+#endif
+
 static int
 s2syslogfacility(char *s)
 
@@ -526,5 +622,18 @@ usage(char *prog)
 
 {
   fprintf(stderr, "Usage: %s [-d] -g|-n oid\n", prog);
-  exit(1);
+  cleanexit(1);
+}
+
+static  void
+cleanexit(int s)
+
+{
+#if HAVE_LIBKSTAT == 1
+  if (kc)
+    kstat_close(kc);
+#endif
+  if (syslogging)
+    closelog();
+  exit(s);
 }

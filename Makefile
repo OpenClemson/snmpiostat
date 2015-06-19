@@ -24,14 +24,16 @@ INSTALLDIRS	= ${exec_prefix}/bin ${exec_prefix}/sbin ${prefix}/etc ${datarootdir
 CPPFLAGS	= 
 CFLAGS		= -g -O2 -DCONFFILE=\"${prefix}/etc/snmpiostat.conf\" -DVERSION=\"1.0.0\"
 LDFLAGS		= 
+LIBS		= -lnetsnmp 
+INSTALL		= install
 
 all:	snmpiostatagent snmpiostat
 
 snmpiostatagent:	snmpiostatagent.o conf.o
-	cc $(LDFLAGS) -o $@ snmpiostatagent.o conf.o
+	cc $(LDFLAGS) -o $@ snmpiostatagent.o conf.o $(LIBS)
 
 snmpiostat:	snmpiostat.o conf.o
-	cc $(LDFLAGS) -o $@ snmpiostat.o conf.o -lnetsnmp
+	cc $(LDFLAGS) -o $@ snmpiostat.o conf.o $(LIBS)
 
 conf.o:		conf.h Makefile
 
@@ -40,15 +42,15 @@ snmpiostat.o:	conf.h config.h Makefile
 snmpiostatagent.o:	conf.h config.h Makefile
 
 install-agent:	snmpiostatagent install-dirs install-conf
-	install -m 755 snmpiostatagent ${exec_prefix}/sbin/snmpiostatagent
-	install -m 644 snmpiostatagent.8 ${datarootdir}/man/man8/snmpiostatagent.8
+	$(INSTALL) -m 755 snmpiostatagent ${exec_prefix}/sbin/snmpiostatagent
+	$(INSTALL) -m 644 snmpiostatagent.8 ${datarootdir}/man/man8/snmpiostatagent.8
 
 install-client:	snmpiostat install-dirs install-conf
-	install -m 755 snmpiostat ${exec_prefix}/bin/snmpiostat
-	install -m 644 snmpiostat.1 ${datarootdir}/man/man1/snmpiostat.1
+	$(INSTALL) -m 755 snmpiostat ${exec_prefix}/bin/snmpiostat
+	$(INSTALL) -m 644 snmpiostat.1 ${datarootdir}/man/man1/snmpiostat.1
 
 install-conf:
-	install -m 644 snmpiostat.conf ${prefix}/etc/snmpiostat.conf
+	$(INSTALL) -m 644 snmpiostat.conf ${prefix}/etc/snmpiostat.conf
 
 install-dirs:
 	for d in $(INSTALLDIRS) ; do \

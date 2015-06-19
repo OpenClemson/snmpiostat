@@ -38,27 +38,25 @@ typedef	unsigned long long	u_longlong;
 #define MAXDEVICES			1024
 
 #define TYPE_UNKNOWN			0
-#define TYPE_IDEDISK			1
-#define TYPE_SCSIDISK			2
-#define TYPE_DEVMAPPER			3
+#define TYPE_DISK			1
+#define TYPE_PARTITION			2
+#define TYPE_TAPE			3
 
 /*
  * From DEVIOSTAT.MIB, index in devIOStatEntry for OIDs of interest.
  */
-#define OI_DEVIOSTATMAJOR		2
-#define OI_DEVIOSTATMINOR		3
-#define OI_DEVIOSTATNAME		4
-#define OI_DEVIOSTATREADS		5
-#define OI_DEVIOSTATREADMERGES		6
-#define OI_DEVIOSTATREADSECTORS		7
-#define OI_DEVIOSTATREADTICKS		8
-#define OI_DEVIOSTATWRITES		9
-#define OI_DEVIOSTATWRITEMERGES		10
-#define OI_DEVIOSTATWRITESECTORS	11
-#define OI_DEVIOSTATWRITETICKS		12
-#define OI_DEVIOSTATTICKS		13
-#define OI_DEVIOSTATAVEQ		14
-#define OI_DEVIOSTATTYPE		15
+#define OI_DEVIOSTATNAME		2
+#define OI_DEVIOSTATREADS		3
+#define OI_DEVIOSTATREADMERGES		4
+#define OI_DEVIOSTATREADSECTORS		5
+#define OI_DEVIOSTATREADTICKS		6
+#define OI_DEVIOSTATWRITES		7
+#define OI_DEVIOSTATWRITEMERGES		8
+#define OI_DEVIOSTATWRITESECTORS	9
+#define OI_DEVIOSTATWRITETICKS		10
+#define OI_DEVIOSTATTICKS		11
+#define OI_DEVIOSTATAVEQ		12
+#define OI_DEVIOSTATTYPE		13
 #define MAXDEVIOSTATOIDS		(OI_DEVIOSTATTYPE + 1)
 
 /*
@@ -76,8 +74,6 @@ static oid	deviostatoid[MAXDEVIOSTATOIDS][MAX_OID_LEN];
 static int	deviostatoidlen;
 
 typedef struct {
-  int		major;
-  int		minor;
   char		name[32];
   u_int		reads;
   u_int		readmerges;
@@ -94,14 +90,13 @@ typedef struct {
 
 static int		showdevice = 1;
 static int		showpartition = 0;
+static int		showtape = 0;
 static int		extendedstats = 0;
 static int		maxidx = 0;
 static oid		baseoid[MAX_OID_LEN];
 static size_t		baselen = MAX_OID_LEN;
 
 static void		optproc(int argc, char * const * argv, int opt);
-static int		processmajor(netsnmp_variable_list *vars, void *data);
-static int		processminor(netsnmp_variable_list *vars, void *data);
 static int		processname(netsnmp_variable_list *vars, void *data);
 static int		processtype(netsnmp_variable_list *vars, void *data);
 static int		getinteger(netsnmp_session *ss, oid *o, u_int oidlen);
@@ -132,7 +127,7 @@ main(int argc, char **argv)
   int			count = -1;
   double		ios;
   u_longlong		sectors;
-  double		ticks;
+  double		rwticks;
   double		busy;
   u_long		uptime;
   u_long		ouptime = 0;
@@ -170,8 +165,6 @@ main(int argc, char **argv)
     myexit(1, ss);
   }
 
-  walk(ss, deviostatoid[OI_DEVIOSTATMAJOR], deviostatoidlen, processmajor, deviostat);
-  walk(ss, deviostatoid[OI_DEVIOSTATMINOR], deviostatoidlen, processminor, deviostat);
   walk(ss, deviostatoid[OI_DEVIOSTATNAME], deviostatoidlen, processname, deviostat);
   walk(ss, deviostatoid[OI_DEVIOSTATTYPE], deviostatoidlen, processtype, deviostat);
   for (i = 1; i <= maxidx; i++) {
@@ -192,10 +185,10 @@ main(int argc, char **argv)
 
   while (1) {
     if (extendedstats)
-      printf("\n%-7s %6s %6s %6s %6s %9s %9s %8s %8s %6s %6s %6s\n", "Device:", "rrqm/s", "wrqm/s", "r/s",
+      printf("\n%-8s %6s %6s %7s %7s %9s %9s %8s %8s %6s %6s %6s\n", "Device:", "rrqm/s", "wrqm/s", "r/s",
 	     "w/s", "rkB/s", "wkB/s", "avgrq-sz", "avgqu-sz", "await", "svctm", "%util");
     else
-      printf("\n%-7s %9s %9s %8s %10s %10s\n", "Device:", "tps", "kB_read/s", "kBwrtn/s", "kB_read", "kB_wrtn");
+      printf("\n%-8s %9s %9s %8s %10s %10s\n", "Device:", "tps", "kB_read/s", "kBwrtn/s", "kB_read", "kB_wrtn");
 
     uptime = getinteger(ss, hrsysuptime, sizeof(hrsysuptime) / sizeof(oid));
     deltams = 1000.0 * (uptime - ouptime) / HZ;
@@ -209,13 +202,13 @@ main(int argc, char **argv)
       ios = cdeviostat.reads + cdeviostat.writes - deviostat[showidx[i]].reads - deviostat[showidx[i]].writes;
       sectors = cdeviostat.readsectors - deviostat[showidx[i]].readsectors +
 		cdeviostat.writesectors - deviostat[showidx[i]].writesectors;
-      ticks = cdeviostat.readticks + cdeviostat.writeticks -
-	      deviostat[showidx[i]].readticks - deviostat[showidx[i]].writeticks;
+      rwticks = cdeviostat.readticks + cdeviostat.writeticks -
+		deviostat[showidx[i]].readticks - deviostat[showidx[i]].writeticks;
       if ((busy = 100.0 * (cdeviostat.ticks - deviostat[showidx[i]].ticks) / deltams) > 100.0)
 	busy = 100.0;
 
       if (extendedstats) {
-	printf("%-7s %6.2f %6.2f %6.2f %6.2f %9.2f %9.2f %8.2f %8.2f %6.2f %6.2f %6.2f\n",
+	printf("%-8s %6.2f %6.2f %7.2f %7.2f %9.2f %9.2f %8.2f %8.2f %6.2f %6.2f %6.2f\n",
 	       deviostat[showidx[i]].name,
 	       1000.0 * (cdeviostat.readmerges - deviostat[showidx[i]].readmerges) / deltams,
 	       1000.0 * (cdeviostat.writemerges - deviostat[showidx[i]].writemerges) / deltams,
@@ -225,7 +218,7 @@ main(int argc, char **argv)
 	       1000.0 * (cdeviostat.writesectors - deviostat[showidx[i]].writesectors) / deltams / 2.0,
 	       ios ?  (double) sectors / ios : 0.0,
 	       (cdeviostat.aveq - deviostat[showidx[i]].aveq) / deltams,
-	       ios ? ticks / ios : 0.0,
+	       ios ? rwticks / ios : 0.0,
 	       ios ? (cdeviostat.ticks - deviostat[showidx[i]].ticks) / ios : 0.0,
 	       busy);
       } else {
@@ -276,6 +269,9 @@ optproc(int argc, char * const * argv, int opt)
       case 'p':
 	showpartition = 1;
 	break;
+      case 't':
+	showtape = 1;
+	break;
       case 'v':
 	printf("snmpiostat version: %s\n", VERSION);
 	exit(0);
@@ -291,33 +287,6 @@ optproc(int argc, char * const * argv, int opt)
 }
 
 static int
-processmajor(netsnmp_variable_list *vars, void *data)
-
-{
-  deviostat_t	*deviostat = (deviostat_t *) data;
-  int		i;
-
-  if ((i = vars->name[vars->name_length - 1]) < MAXDEVICES) {
-    if (i > maxidx)
-      maxidx = i;
-    deviostat[i].major = *vars->val.integer;
-  }
-  return 1;
-}
-
-static int
-processminor(netsnmp_variable_list *vars, void *data)
-
-{
-  deviostat_t	*deviostat = (deviostat_t *) data;
-  int		i;
-
-  if ((i = vars->name[vars->name_length - 1]) < MAXDEVICES)
-    deviostat[i].minor = *vars->val.integer;
-  return 1;
-}
-
-static int
 processname(netsnmp_variable_list *vars, void *data)
 
 {
@@ -327,6 +296,8 @@ processname(netsnmp_variable_list *vars, void *data)
   if ((i = vars->name[vars->name_length - 1]) < MAXDEVICES) {
     strncpy(deviostat[i].name, (const char *) vars->val.string, vars->val_len);
     deviostat[i].name[vars->val_len] = '\0';
+    if (i > maxidx)
+      maxidx = i;
   }
   return 1;
 }
@@ -577,12 +548,12 @@ showit(deviostat_t *deviostat, char *watchdev[MAXDEVICES], int watchidx)
     return 0;
   }
 
-  if (deviostat->type == TYPE_IDEDISK)
-    return (!(deviostat->minor & 0x3F) && showdevice) || ((deviostat->minor & 0x3F) && showpartition);
-  else if (deviostat->type == TYPE_SCSIDISK)
-    return (!(deviostat->minor & 0x0F) && showdevice) || ((deviostat->minor & 0x0F) && showpartition);
-  else if (deviostat->type == TYPE_DEVMAPPER)
-    return 1;
+  if (deviostat->type == TYPE_DISK)
+    return showdevice;
+  else if (deviostat->type == TYPE_PARTITION)
+    return showpartition;
+  else if (deviostat->type == TYPE_TAPE)
+    return showtape;
 
   return 0;
 }
@@ -590,8 +561,6 @@ showit(deviostat_t *deviostat, char *watchdev[MAXDEVICES], int watchidx)
 /*
  * DEVIOSTAT.MIB oids of interest to this program are:
  *
- *    major		baseoid.1.1.2
- *    minor		baseoid.1.1.3
  *    name		baseoid.1.1.4
  *    reads		baseoid.1.1.5
  *    readmerges	baseoid.1.1.6
@@ -613,7 +582,7 @@ makedeviostatoids()
 {
   int	i;
 
-  for (i = OI_DEVIOSTATMAJOR; i < MAXDEVIOSTATOIDS; i++) {
+  for (i = OI_DEVIOSTATNAME; i < MAXDEVIOSTATOIDS; i++) {
     deviostatoidlen = oidcpy(deviostatoid[i], baseoid, baselen);
     deviostatoid[i][deviostatoidlen++] = 1;
     deviostatoid[i][deviostatoidlen++] = 1;
@@ -651,7 +620,7 @@ static void
 usage()
 
 {
-  fprintf(stderr, "Usage: snmpiostat [snmp-options] [-Ch] [-Cp] [-Cv] [-Cx]agent [device ...] [interval [count]]\n");
+  fprintf(stderr, "Usage: snmpiostat [snmp-options] [-Ch] [-Cp] [-Ct] [-Cv] [-Cx]agent [device ...] [interval [count]]\n");
   myexit(1, NULL);
 }
 
